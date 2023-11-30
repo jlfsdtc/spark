@@ -524,9 +524,7 @@ class SparkSqlAstBuilder extends AstBuilder {
 
   override def visitCreateLogicalView(ctx: CreateLogicalViewContext): LogicalPlan =
     withOrigin(ctx) {
-      if (!ctx.identifierList.isEmpty) {
-        operationNotAllowed("CREATE LOGICAL VIEW ... PARTITIONED ON", ctx)
-      }
+      val partitionColumnNames = ctx.identifierList().asScala.flatMap(visitIdentifierList)
 
       checkDuplicateClauses(ctx.commentSpec(), "COMMENT", ctx)
       checkDuplicateClauses(ctx.PARTITIONED, "PARTITIONED ON", ctx)
@@ -550,15 +548,13 @@ class SparkSqlAstBuilder extends AstBuilder {
         plan(ctx.query),
         false,
         false,
-        GlobalTempView)
-
+        GlobalTempView,
+        partitionColumnNames = partitionColumnNames)
     }
 
   override def visitReplaceLogicalView(ctx: ReplaceLogicalViewContext): LogicalPlan =
     withOrigin(ctx) {
-      if (!ctx.identifierList.isEmpty) {
-        operationNotAllowed("REPLACE LOGICAL VIEW ... PARTITIONED ON", ctx)
-      }
+      val partitionColumnNames = ctx.identifierList().asScala.flatMap(visitIdentifierList)
 
       checkDuplicateClauses(ctx.commentSpec(), "COMMENT", ctx)
       checkDuplicateClauses(ctx.PARTITIONED, "PARTITIONED ON", ctx)
@@ -582,8 +578,8 @@ class SparkSqlAstBuilder extends AstBuilder {
         plan(ctx.query),
         false,
         true,
-        GlobalTempView)
-
+        GlobalTempView,
+        partitionColumnNames = partitionColumnNames)
     }
 
   /**

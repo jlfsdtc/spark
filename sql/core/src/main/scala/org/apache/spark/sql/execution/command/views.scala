@@ -68,7 +68,8 @@ case class CreateViewCommand(
     replace: Boolean,
     viewType: ViewType,
     isAnalyzed: Boolean = false,
-    referredTempFunctions: Seq[String] = Seq.empty)
+    referredTempFunctions: Seq[String] = Seq.empty,
+    partitionColumnNames: Seq[String] = Seq.empty)
   extends RunnableCommand with AnalysisOnlyCommand {
 
   import ViewHelper._
@@ -134,7 +135,8 @@ case class CreateViewCommand(
         originalText,
         analyzedPlan,
         aliasedPlan,
-        referredTempFunctions)
+        referredTempFunctions,
+        partitionColumnNames)
       catalog.createGlobalTempView(name.table, tableDefinition, overrideIfExists = replace)
     } else if (catalog.tableExists(name)) {
       val tableMetadata = catalog.getTableMetadata(name)
@@ -608,7 +610,8 @@ object ViewHelper extends SQLConfHelper with Logging {
       originalText: Option[String],
       analyzedPlan: LogicalPlan,
       aliasedPlan: LogicalPlan,
-      referredTempFunctions: Seq[String]): TemporaryViewRelation = {
+      referredTempFunctions: Seq[String],
+      partitionColumnNames: Seq[String] = Seq.empty): TemporaryViewRelation = {
     val uncache = getRawTempView(name.table).map { r =>
       needsToUncache(r, aliasedPlan)
     }.getOrElse(false)
@@ -630,10 +633,11 @@ object ViewHelper extends SQLConfHelper with Logging {
           analyzedPlan,
           aliasedPlan.schema,
           originalText.get,
-          referredTempFunctions))
+          referredTempFunctions,
+          partitionColumnNames))
     } else {
       TemporaryViewRelation(
-        prepareTemporaryViewStoringAnalyzedPlan(name, aliasedPlan),
+        prepareTemporaryViewStoringAnalyzedPlan(name, aliasedPlan, partitionColumnNames),
         Some(aliasedPlan))
     }
   }
@@ -663,7 +667,8 @@ object ViewHelper extends SQLConfHelper with Logging {
       analyzedPlan: LogicalPlan,
       viewSchema: StructType,
       originalText: String,
-      tempFunctions: Seq[String]): CatalogTable = {
+      tempFunctions: Seq[String],
+      partitionColumnNames: Seq[String] = Seq.empty): CatalogTable = {
 
     val catalog = session.sessionState.catalog
     val tempViews = collectTemporaryViews(analyzedPlan)
@@ -677,6 +682,7 @@ object ViewHelper extends SQLConfHelper with Logging {
       tableType = CatalogTableType.VIEW,
       storage = CatalogStorageFormat.empty,
       schema = viewSchema,
+      partitionColumnNames = partitionColumnNames,
       viewText = Some(originalText),
       properties = newProperties)
   }
@@ -687,12 +693,14 @@ object ViewHelper extends SQLConfHelper with Logging {
    */
   private def prepareTemporaryViewStoringAnalyzedPlan(
       viewName: TableIdentifier,
-      analyzedPlan: LogicalPlan): CatalogTable = {
+      analyzedPlan: LogicalPlan,
+      partitionColumnNames: Seq[String] = Seq.empty): CatalogTable = {
     CatalogTable(
       identifier = viewName,
       tableType = CatalogTableType.VIEW,
       storage = CatalogStorageFormat.empty,
       schema = analyzedPlan.schema,
+      partitionColumnNames = partitionColumnNames,
       properties = Map((VIEW_STORING_ANALYZED_PLAN, "true")))
   }
 }
